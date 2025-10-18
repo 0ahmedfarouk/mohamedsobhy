@@ -48,7 +48,7 @@
         <div class="max-w-[720px]">
           <div style="display:inline-block;background:linear-gradient(90deg,#8ab4ff,#78a9ff);color:#00162a;font-weight:800;padding:8px 14px;border-radius:12px">مرحبًا بطلاب 3 ثانوي</div>
           <h1 class="text-xl md:text-2xl" style="margin-top:10px;font-weight:800">امتحان اللغة العربية بإشراف <span style="color:#8ab4ff">Mr. Mohamed Sobhy</span></h1>
-          <p class="muted mt-2">أدخل الـ ID وكلمة المرور، واضغط <b>ابدأ الامتحان</b> لبدء المؤقت (٤ ساعات). على الموبايل: الخروج من التطبيق أو التبديل يسبب تحذير.</p>
+          <p class="muted mt-2">أدخل الـ ID وكلمة المرور، واضغط <b>ابدأ الامتحان</b> لبدء المؤقت (<b>ساعتين</b>). على الموبايل: الخروج من التطبيق أو التبديل يسبب تحذير.</p>
           <div class="mt-3 actions items-center">
             <input id="sid" placeholder="ID (مثال: Farouk)" class="allow-select input px-3 py-3 text-black w-56" autocomplete="off"/>
             <input id="spw" placeholder="كلمة المرور" type="password" class="allow-select input px-3 py-3 text-black w-56" autocomplete="off"/>
@@ -135,7 +135,7 @@
 
 <script>
 const GFORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSd-KaIDtPRra4Ixa-sl70FUIFXuxQ-buS-zt_TLmJ-bHlwLHg/viewform?embedded=true";
-const DURATION = 4 * 60 * 60;
+const DURATION = 2 * 60 * 60; // ← ساعتين بدلاً من 4 ساعات
 const WARN_LIMIT = 3;
 const REDO_PASSWORD = "admin9redo";
 const STUDENTS = {"Farouk":"Farouk273","Shady":"Shady441","Mostafa":"Mostafa562","Lina":"Lina834","Rokaya":"Rokaya199","Menna":"Menna482","Zad":"Zad901","7oda":"7oda317","Moaz":"Moaz652","Menna2":"Menna745","Dalen":"Dalen209","Jana":"Jana338","Somaya":"Somaya555","Roudina":"Roudina812","Malak":"Malak633","Omar1":"Omar441","Omar2":"Omar932","Sama":"Sama214","Roaa":"Roaa687"};
@@ -189,7 +189,7 @@ function startExam(){
   log('LOGIN:'+sid);
   openExam(sid, startAt);
 }
-function showInfo(){ alert('التعليمات:\n- مدة الامتحان ٤ ساعات من لحظة البدء.\n- الخروج من التطبيق/التبويب = تحذير.\n- عند ٣ تحذيرات يتم القفل.\n- النسخ ممنوع، اللصق مسموح.'); }
+function showInfo(){ alert('التعليمات:\n- مدة الامتحان ساعتين من لحظة البدء.\n- الخروج من التطبيق/التبويب = تحذير.\n- عند ٣ تحذيرات يتم القفل.\n- النسخ ممنوع، اللصق مسموح.'); }
 
 // Exam open
 function openExam(sid, startAt){ $('#studentLabel').textContent = `الطالب: ${sid} (${sid})`; $('#gform').src = GFORM_URL; show('exam'); startTimer(startAt); guards(); }
