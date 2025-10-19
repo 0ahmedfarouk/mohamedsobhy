@@ -14,7 +14,7 @@
       background:radial-gradient(1200px 700px at 70% -10%, #123 0%, transparent 60%), linear-gradient(135deg,var(--bg1),var(--bg2));
       font-family:Cairo, system-ui;
       -webkit-touch-callout:none;
-      user-select:none; -webkit-user-select:none;   /* ⛔ منع النسخ بالموقع */
+      user-select:none; -webkit-user-select:none;  /* ⛔ منع النسخ بالموقع */
     }
     .allow-select{ -webkit-user-select:text; user-select:text; } /* ✅ سماح في الحقول */
     .input{ background:#fff; color:#111; caret-color:#111; border-radius:12px; }
@@ -155,7 +155,7 @@ function fmt(sec){ const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=
 function setWarn(n){ localStorage.setItem(LS.warns,String(n)); $('#warns').textContent=n; }
 function getWarn(){ return parseInt(localStorage.getItem(LS.warns)||"0",10); }
 function show(id){ ['welcome','exam','locked'].forEach(x=>$('#'+x).classList.add('hidden')); $('#'+id).classList.remove('hidden'); }
-function lock(){ localStorage.setItem(LS.locked,'1'); log('LOCK'); show('locked'); }
+function lock(){ localStorage.setItem(LS.locked,'1'); teardownGuards(); log('LOCK'); show('locked'); }
 function log(ev){ const arr = JSON.parse(localStorage.getItem(LS.log)||"[]"); arr.push({t:new Date().toISOString(), ev}); localStorage.setItem(LS.log, JSON.stringify(arr)); }
 
 $('#year').textContent = new Date().getFullYear();
@@ -206,78 +206,90 @@ function showInfo(){ alert('التعليمات:\n- مدة الامتحان سا�
 
 /* ===== فتح الامتحان ===== */
 function openExam(sid, startAt){
+  teardownGuards();                 // ⛔ تأكد من عدم تكرار المستمعين
   $('#studentLabel').textContent = `الطالب: ${sid} (${sid})`;
-  // إجبار إعادة تحميل الفورم في كل جلسة/ريدو
-  $('#gform').src = GFORM_URL + (GFORM_URL.includes('?')?'&':'?') + 't=' + Date.now();
+  $('#gform').src = GFORM_URL + (GFORM_URL.includes('?')?'&':'?') + 't=' + Date.now(); // إعادة تحميل مضمونة
   show('exam'); startTimer(startAt); guards();
 }
 
-/* ===== حمايات مُحسّنة (Android + iOS + Windows) ===== */
+/* ===== حمايات مُحسّنة (Singleton) ===== */
+const Guard = {
+  attached:false,
+  refs:[],            // مرجع لكل handler علشان نفكّه
+  warnCooldown:false,
+  lastWarnKey:'',
+  lastWarnAt:0,
+  beforeUnloadRef:null,
+  inForm:false,
+  inFormTO:null,
+  lastActive:now(),
+};
+
+function on(el, ev, fn, opts){ el.addEventListener(ev, fn, opts||{}); Guard.refs.push([el, ev, fn, opts||{}]); }
+
 function guards(){
-  // ⛔ كليك يمين + نسخ/قص + Ctrl/Cmd+C
-  window.addEventListener('contextmenu', e=>e.preventDefault(), {passive:false});
+  if(Guard.attached) return;            // ✅ مرّة واحدة
+  Guard.attached = true;
+
+  // منع كليك يمين + نسخ/قص + Ctrl/Cmd+C
+  on(window,'contextmenu', e=>e.preventDefault(), {passive:false});
   ['copy','cut'].forEach(type=>{
-    window.addEventListener(type, e=>{ e.preventDefault(); addWarn('محاولة نسخ/قص'); }, {passive:false});
+    on(window,type, e=>{ e.preventDefault(); addWarn('محاولة نسخ/قص','copy'); }, {passive:false});
   });
-  window.addEventListener('keydown', e=>{
-    if ((e.ctrlKey||e.metaKey) && (e.key==='c' || e.key==='C')) { e.preventDefault(); addWarn('محاولة نسخ'); return; }
+  on(window,'keydown', e=>{
+    if ((e.ctrlKey||e.metaKey) && (e.key==='c' || e.key==='C')) { e.preventDefault(); addWarn('محاولة نسخ','copyKey'); return; }
     if (e.key === 'F12' || ((e.ctrlKey||e.metaKey) && e.shiftKey && ['I','C','J'].includes(e.key))) {
-      e.preventDefault(); addWarn('محاولة فتح أدوات المطور');
+      e.preventDefault(); addWarn('محاولة فتح أدوات المطور','devtools');
     }
   }, {passive:false});
 
-  // ✅ تجاهل هزّات الكيبورد داخل الفورم (Android)
-  let inForm = false, inFormTO = null;
-  const markInForm = () => { inForm = true; clearTimeout(inFormTO); inFormTO = setTimeout(()=>{ inForm = false; }, 3000); };
+  // تمييز التفاعل داخل الفورم (تجاهل اهتزاز الكيبورد بأندرويد)
   const gform = $('#gform');
+  const markInForm = () => { Guard.inForm = true; clearTimeout(Guard.inFormTO); Guard.inFormTO = setTimeout(()=>{ Guard.inForm = false; }, 3000); };
   ['pointerdown','touchstart','mousedown','focus'].forEach(ev=>{
-    gform.addEventListener(ev, markInForm, {passive:true});
+    on(gform, ev, markInForm, {passive:true});
   });
 
-  // ♥ Heartbeat + Visibility/Focus لالتقاط الخروج الحقيقي (iOS/Android/Win)
-  let lastActive = now();
-  const ACT_GAP = 2000; // 2s: لو رجع بعد أكتر من كده نعدّه تحذير
-  const ping = () => { lastActive = now(); };
-  ['mousemove','keydown','touchstart','focus'].forEach(ev=> window.addEventListener(ev, ping, {passive:true}));
+  // Heartbeat + Visibility/Focus
+  const ping = () => { Guard.lastActive = now(); };
+  ['mousemove','keydown','touchstart','focus'].forEach(ev=> on(window, ev, ping, {passive:true}));
 
-  // Debounce لأي blur/visibility بسبب الكيبورد
   let hideTO = null;
   const maybeHidden = () => {
     clearTimeout(hideTO);
     hideTO = setTimeout(()=>{
-      if (inForm) return; // جوّا الفورم = تجاهل
-      if (document.visibilityState === 'hidden' || !document.hasFocus()) {
-        addWarn('الخروج من صفحة الامتحان');
-      }
+      if (Guard.inForm) return;
+      const key = 'hidden';
+      if (document.visibilityState === 'hidden' || !document.hasFocus()) addWarn('الخروج من صفحة الامتحان', key);
     }, 350);
   };
-
-  // عند الرجوع نقيس فجوة الزمن
   const onReturn = () => {
-    const gap = now() - lastActive;
-    if (gap > ACT_GAP && !inForm) { addWarn('العودة بعد مغادرة التطبيق/الصفحة'); }
+    const gap = now() - Guard.lastActive;
+    if (gap > 2000 && !Guard.inForm) addWarn('العودة بعد مغادرة التطبيق/الصفحة','return');
     ping();
   };
+  on(document,'visibilitychange', ()=>{ (document.visibilityState==='hidden') ? maybeHidden() : onReturn(); }, {passive:true});
+  on(window,'blur',  maybeHidden, {passive:true});
+  on(window,'focus', onReturn,   {passive:true});
+  on(window,'pageshow', onReturn,{passive:true});
 
-  document.addEventListener('visibilitychange', ()=>{
-    if (document.visibilityState === 'hidden') { maybeHidden(); }
-    else { onReturn(); }
-  });
-  window.addEventListener('blur',  maybeHidden, {passive:true});
-  window.addEventListener('focus', onReturn,  {passive:true});
-  window.addEventListener('pageshow', onReturn, {passive:true}); // BFCache (iOS/سفاري)
-
-  // تحذير قبل مغادرة الصفحة فعليًا (بدون قفل تلقائي)
-  window.addEventListener('beforeunload', (e)=>{
+  // beforeunload شرطه واضح ويتفك مع القفل/الخروج
+  Guard.beforeUnloadRef = (e)=>{
     const examShown = $('#exam') && !$('#exam').classList.contains('hidden');
-    if (examShown) { e.preventDefault(); e.returnValue=''; }
-  });
-
-  // Heartbeat مؤقّت (لو المتصفح فروّح الحدثين)
-  setInterval(()=>{ /* يحدّث lastActive لو في تفاعل ضعيف */ }, 1000);
+    const locked = localStorage.getItem(LS.locked)==='1';
+    if (examShown && !locked) { e.preventDefault(); e.returnValue=''; }
+  };
+  on(window,'beforeunload', Guard.beforeUnloadRef, {});
 }
 
-/* ===== نافذة تحذير ===== */
+function teardownGuards(){
+  Guard.attached = false;
+  // فك كل المستمعين السابقين
+  Guard.refs.forEach(([el,ev,fn,opts])=> el.removeEventListener(ev,fn,opts));
+  Guard.refs.length = 0;
+}
+
+/* ===== التحذير المُهذّب (cooldown + dedupe) ===== */
 function openWarnModal(text, n){
   $('#warnNo').textContent = String(n);
   $('#warnMsg').textContent = text + ' — من فضلك ابقَ داخل صفحة الامتحان واتّبع القواعد.';
@@ -287,8 +299,18 @@ function openWarnModal(text, n){
     $('#warnOk').addEventListener('click', handler, {once:true});
   });
 }
-async function addWarn(kind){
-  let n = getWarn()+1; setWarn(n);
+
+async function addWarn(kind, key='generic'){
+  // تبريد 1.2 ثانية + منع تكرار نفس السبب خلال 1.2 ثانية
+  const nowt = now();
+  if (Guard.warnCooldown) return;
+  if (Guard.lastWarnKey===key && (nowt - Guard.lastWarnAt) < 1200) return;
+  Guard.warnCooldown = true; setTimeout(()=>Guard.warnCooldown=false, 1200);
+  Guard.lastWarnKey = key; Guard.lastWarnAt = nowt;
+
+  let n = getWarn();
+  if (n >= WARN_LIMIT) return; // لا تزود بعد القفل
+  n++; setWarn(n);
   await openWarnModal(kind, n);
   if(n>=WARN_LIMIT){ alert('تم تجاوز الحد من التحذيرات. سيتم قفل الصفحة.'); lock(); }
 }
@@ -299,16 +321,18 @@ function closeModal(){ const modal=$('#modal'); if(modal){ modal.style.display='
 function verifyRedo(){
   const val = ($('#redoPw').value || '').trim();
   if(val === REDO_PASSWORD){
-    // تصفير كامل
+    // تصفير كامل (بدون أي تحذير تلقائي)
     localStorage.setItem(LS.locked, '0');
     localStorage.setItem(LS.warns, "0");
-    localStorage.setItem(LS.redo,  String((parseInt(localStorage.getItem(LS.redo)||'0',10))+1));
+    setWarn(0);
+    Guard.lastWarnKey=''; Guard.lastWarnAt=0; Guard.warnCooldown=false;
+
     const sid = localStorage.getItem(LS.id) || prompt('أدخل ID الطالب:');
     const nowt = now();
     if(sid){
       localStorage.setItem(LS.id, sid);
       localStorage.setItem(LS.start, String(nowt));
-      openExam(sid, nowt); // يعيد تحميل النموذج + المؤقت
+      openExam(sid, nowt); // يعيد تحميل النموذج + المؤقت + يركّب الحمايات مرة واحدة
     }
     closeModal();
     alert('تم تفعيل الريدو — المؤقت اتصفر والنموذج اتعمله إعادة تحميل.');
@@ -326,12 +350,14 @@ $('#pwToggle').addEventListener('change', (e)=>{ $('#redoPw').type = e.target.ch
 /* ===== إنهاء / خروج ===== */
 function endNow(){
   if(confirm('هل تريد إنهاء الامتحان الآن؟ تأكد من الضغط على "إرسال" داخل نموذج Google أولاً.')){
+    teardownGuards();
     localStorage.removeItem(LS.id); localStorage.removeItem(LS.start); localStorage.removeItem(LS.warns); localStorage.removeItem(LS.redo);
     log('END_NOW'); show('welcome');
   }
 }
 function logout(){
   if(confirm('تسجيل خروج سيُنهي الجلسة. متأكد؟')){
+    teardownGuards();
     localStorage.removeItem(LS.id); localStorage.removeItem(LS.start); localStorage.removeItem(LS.warns); localStorage.removeItem(LS.redo);
     log('LOGOUT'); show('welcome');
   }
@@ -339,7 +365,7 @@ function logout(){
 addTap('#submitEnd', endNow);
 addTap('#logout', logout);
 
-/* ===== API للتسهيل ===== */
+/* ===== API ===== */
 window.startExam = startExam;
 window.showInfo = showInfo;
 window.openRedoModal = openRedoModal;
