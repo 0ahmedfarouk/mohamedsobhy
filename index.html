@@ -134,15 +134,14 @@
   </div>
 
 <script>
-/* =================== الإعدادات =================== */
-const GFORM_URL   = "https://docs.google.com/forms/d/e/1FAIpQLSd-KaIDtPRra4Ixa-sl70FUIFXuxQ-buS-zt_TLmJ-bHlwLHg/viewform?embedded=true";
-const DURATION    = 2 * 60 * 60;   // ساعتان
-const WARN_LIMIT  = 3;
+const GFORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSd-KaIDtPRra4Ixa-sl70FUIFXuxQ-buS-zt_TLmJ-bHlwLHg/viewform?embedded=true";
+const DURATION = 2 * 60 * 60; // ساعتين
+const WARN_LIMIT = 3;
 const REDO_PASSWORD = "admin9redo";
 const STUDENTS = {"Farouk":"Farouk273","Shady":"Shady441","Mostafa":"Mostafa562","Lina":"Lina834","Rokaya":"Rokaya199","Menna":"Menna482","Zad":"Zad901","7oda":"7oda317","Moaz":"Moaz652","Menna2":"Menna745","Dalen":"Dalen209","Jana":"Jana338","Somaya":"Somaya555","Roudina":"Roudina812","Malak":"Malak633","Omar1":"Omar441","Omar2":"Omar932","Sama":"Sama214","Roaa":"Roaa687"};
 
 const LS = { id:'ms_id', start:'ms_start', warns:'ms_warns', locked:'ms_locked', redo:'ms_redo', log:'ms_log' };
-const $   = (s)=>document.querySelector(s);
+const $ = (s)=>document.querySelector(s);
 const now = ()=>Date.now();
 const pad = (n)=>String(n).padStart(2,'0');
 function fmt(sec){ const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=sec%60; return `${pad(h)}:${pad(m)}:${pad(s)}`; }
@@ -154,37 +153,18 @@ function log(ev){ const arr = JSON.parse(localStorage.getItem(LS.log)||"[]"); ar
 
 $('#year').textContent = new Date().getFullYear();
 
-/* ======= منع الإنذار الكاذب عند فتح الكيبورد (Android/iOS) ======= */
-let _vvh = (window.visualViewport?.height || window.innerHeight);
-let _lastTapTs = 0;
-let _keyboardOpen = false;
-let _kbTimer = null;
-function _markTapInsideForm(){ _lastTapTs = Date.now(); }
-function _watchViewportResize(){
-  const h = (window.visualViewport?.height || window.innerHeight);
-  const delta = _vvh - h;   // موجب = تقلص الارتفاع (غالبًا كيبورد)
-  _vvh = h;
-  if (delta > 120 && (Date.now() - _lastTapTs) < 800) {
-    _keyboardOpen = true;
-    clearTimeout(_kbTimer);
-    _kbTimer = setTimeout(()=>{ _keyboardOpen = false; }, 1200);
-  }
-}
-window.addEventListener('resize', _watchViewportResize, {passive:true});
-if (window.visualViewport){
-  window.visualViewport.addEventListener('resize', _watchViewportResize, {passive:true});
-}
-
-/* =================== استعادة الجلسة =================== */
 (function restore(){
   if(localStorage.getItem(LS.locked)==='1'){ show('locked'); return; }
   const sid = localStorage.getItem(LS.id);
-  const st  = parseInt(localStorage.getItem(LS.start)||"0",10);
-  if(sid && st && (now() - st) < DURATION*1000){ openExam(sid, st); setWarn(getWarn()); }
-  else { ['id','start','warns'].forEach(k=>localStorage.removeItem(LS[k])); show('welcome'); }
+  const st = parseInt(localStorage.getItem(LS.start)||"0",10);
+  if(sid && st && (now() - st) < DURATION*1000){
+    openExam(sid, st); setWarn(getWarn());
+  } else {
+    ['id','start','warns'].forEach(k=>localStorage.removeItem(LS[k]));
+    show('welcome');
+  }
 })();
 
-/* =================== المؤقت =================== */
 let interval=null;
 function startTimer(startAt){
   function tick(){
@@ -197,7 +177,7 @@ function startTimer(startAt){
   tick(); interval=setInterval(tick,1000);
 }
 
-/* =================== لمسات موبايل =================== */
+// Tap helpers
 function addTap(id, fn){
   const el = typeof id==='string' ? $(id) : id;
   if(!el) return;
@@ -205,49 +185,33 @@ function addTap(id, fn){
   el.addEventListener('touchend', (e)=>{ e.preventDefault(); fn(e); }, {passive:false});
 }
 
-/* =================== بدء / إرشادات =================== */
+// Start / Info
 function startExam(){
-  const sid = $('#sid').value.trim(); const pw = $('#spw').value.trim();
+  const sid = $('#sid').value.trim(); const pw  = $('#spw').value.trim();
   if(!sid || !pw) return alert('اكتب الـ ID وكلمة المرور');
   if(!(sid in STUDENTS) || STUDENTS[sid] !== pw) return alert('بيانات الدخول غير صحيحة');
   const startAt = now(); localStorage.setItem(LS.id, sid); localStorage.setItem(LS.start, String(startAt)); localStorage.setItem(LS.warns, "0"); localStorage.setItem(LS.redo, "0");
-  log('LOGIN:'+sid);
-  openExam(sid, startAt);
+  log('LOGIN:'+sid); openExam(sid, startAt);
 }
 function showInfo(){ alert('التعليمات:\n- مدة الامتحان ساعتين من لحظة البدء.\n- الخروج من التطبيق/التبويب = تحذير.\n- عند ٣ تحذيرات يتم القفل.\n- النسخ ممنوع، اللصق مسموح.'); }
 
-/* =================== فتح صفحة الامتحان =================== */
+// Exam open
 function openExam(sid, startAt){
   $('#studentLabel').textContent = `الطالب: ${sid} (${sid})`;
-  const frm = document.getElementById('gform');
-  frm.src = GFORM_URL;
-  // تسجيل اللمسة داخل الفورم لتمييز فتح الكيبورد
-  ['pointerdown','touchstart','mousedown','focus'].forEach(ev=>{
-    frm.addEventListener(ev, _markTapInsideForm, {passive:true});
-  });
+  $('#gform').src = GFORM_URL;
   show('exam'); startTimer(startAt); guards();
 }
 
-/* =================== منع الغش =================== */
+// Anti-cheat
 function guards(){
-  // منع القائمة اليمنى والنسخ (اللصق مسموح افتراضيًا داخل الفورم)
   window.addEventListener('contextmenu', e=>e.preventDefault(), {passive:false});
   window.addEventListener('copy', e=>{ e.preventDefault(); addWarn('نسخ محتوى'); }, {passive:false});
   window.addEventListener('keydown', e=>{
-    if (e.key === 'F12' || ((e.ctrlKey||e.metaKey) && e.shiftKey && ['I','C','J'].includes(e.key))) {
-      e.preventDefault(); addWarn('محاولة فتح أدوات المطور');
-    }
+    if (e.key === 'F12' || ((e.ctrlKey||e.metaKey) && e.shiftKey && ['I','C','J'].includes(e.key))) { e.preventDefault(); addWarn('محاولة فتح أدوات المطور'); }
   }, {passive:false});
 
-  function hidden(){
-    // تجاهل الخروج لو الكيبورد لسه مفتوح بعد لمس داخل الفورم
-    if (_keyboardOpen) return;
-    log('HIDE');
-    addWarn('الخروج من التطبيق/التبويب');
-    try{ location.reload(); }catch{}
-  }
+  function hidden(){ log('HIDE'); addWarn('الخروج من التطبيق/التبويب'); try{ location.reload(); }catch{} }
   function shown(){ log('SHOW'); }
-
   document.addEventListener('visibilitychange', ()=>{ if(document.hidden) hidden(); else shown(); });
   window.addEventListener('pagehide', hidden);
   window.addEventListener('blur', ()=>{ if(/Mobi|Android|iPhone/i.test(navigator.userAgent)) hidden(); });
@@ -256,7 +220,7 @@ function guards(){
   window.addEventListener('beforeunload', (e)=>{ if($('#exam') && !$('#exam').classList.contains('hidden')){ e.preventDefault(); e.returnValue=''; } });
 }
 
-/* =================== نافذة التحذير =================== */
+// Warning modal
 function openWarnModal(text, n){
   $('#warnNo').textContent = String(n);
   $('#warnMsg').textContent = text + ' — من فضلك ابقَ داخل صفحة الامتحان واتّبع القواعد.';
@@ -266,13 +230,14 @@ function openWarnModal(text, n){
     $('#warnOk').addEventListener('click', handler, {once:true});
   });
 }
+
 async function addWarn(kind){
   let n = getWarn()+1; setWarn(n);
   await openWarnModal(kind, n);
   if(n>=WARN_LIMIT){ alert('تم تجاوز الحد من التحذيرات. سيتم قفل الصفحة.'); lock(); }
 }
 
-/* =================== الريدو =================== */
+// REDO
 function openRedoModal(){ const modal = $('#modal'); if(!modal) return; modal.style.display = 'flex'; $('#redoPw').type = $('#pwToggle').checked ? 'text' : 'password'; $('#redoPw').focus(); }
 function closeModal(){ const modal=$('#modal'); if(modal){ modal.style.display='none'; } $('#redoPw').value=''; }
 function verifyRedo(){
@@ -283,8 +248,7 @@ function verifyRedo(){
     localStorage.setItem(LS.redo, String(parseInt(localStorage.getItem(LS.redo)||'0')+1));
     const sid = localStorage.getItem(LS.id) || prompt('أدخل ID الطالب:');
     if(sid){ localStorage.setItem(LS.id, sid); openExam(sid, nowt); }
-    closeModal();
-    alert('تم تفعيل الريدو — المؤقت اتصفر والنموذج اتعمله إعادة تحميل.');
+    closeModal(); alert('تم تفعيل الريدو — المؤقت اتصفر والنموذج اتعمله إعادة تحميل.');
   } else {
     alert('كلمة المرور غير صحيحة. اطلبها من المدرس.');
   }
@@ -296,7 +260,7 @@ addTap('#redoBtn', openRedoModal);
 document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeModal(); });
 $('#pwToggle').addEventListener('change', (e)=>{ $('#redoPw').type = e.target.checked ? 'text' : 'password'; });
 
-/* =================== إنهاء وخروج =================== */
+// End / Logout
 function endNow(){
   if(confirm('هل تريد إنهاء الامتحان الآن؟ تأكد من الضغط على "إرسال" داخل نموذج Google أولاً.')){
     localStorage.removeItem(LS.id); localStorage.removeItem(LS.start); localStorage.removeItem(LS.warns);
@@ -312,7 +276,6 @@ function logout(){
 addTap('#submitEnd', endNow);
 addTap('#logout', logout);
 
-/* للتصريح للدوال من HTML */
 window.startExam = startExam;
 window.showInfo = showInfo;
 window.openRedoModal = openRedoModal;
