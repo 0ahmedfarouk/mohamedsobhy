@@ -25,6 +25,8 @@
     .btn{padding:12px 16px;border-radius:12px;border:1px solid rgba(255,255,255,0.12);font-weight:700}
     .btn-primary{background:#8ab4ff;color:#00162a;border:none}
     .actions{display:flex;gap:8px;flex-wrap:wrap}
+    /* Toast بسيط */
+    #softToast{position:fixed;left:16px;right:16px;bottom:16px;background:#0b1937;color:#dbe6ff;border:1px solid #2a3b6b;padding:12px 14px;border-radius:12px;z-index:80;box-shadow:0 6px 24px rgba(0,0,0,.4);text-align:center;font-weight:700;display:none}
   </style>
 </head>
 <body>
@@ -133,6 +135,9 @@
     </div>
   </div>
 
+  <!-- Toast -->
+  <div id="softToast"></div>
+
 <script>
 const GFORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSd-KaIDtPRra4Ixa-sl70FUIFXuxQ-buS-zt_TLmJ-bHlwLHg/viewform?embedded=true";
 const DURATION = 2 * 60 * 60; // ساعتين
@@ -140,7 +145,7 @@ const WARN_LIMIT = 3;
 const REDO_PASSWORD = "admin9redo";
 const STUDENTS = {"Farouk":"Farouk273","Shady":"Shady441","Mostafa":"Mostafa562","Lina":"Lina834","Rokaya":"Rokaya199","Menna":"Menna482","Zad":"Zad901","7oda":"7oda317","Moaz":"Moaz652","Menna2":"Menna745","Dalen":"Dalen209","Jana":"Jana338","Somaya":"Somaya555","Roudina":"Roudina812","Malak":"Malak633","Omar1":"Omar441","Omar2":"Omar932","Sama":"Sama214","Roaa":"Roaa687"};
 
-const LS = { id:'ms_id', start:'ms_start', warns:'ms_warns', locked:'ms_locked', redo:'ms_redo', log:'ms_log' };
+const LS = { id:'ms_id', start:'ms_start', warns:'ms_warns', locked:'ms_locked', redo:'ms_redo', log:'ms_log', pending:'ms_pending_warns' };
 const $ = (s)=>document.querySelector(s);
 const now = ()=>Date.now();
 const pad = (n)=>String(n).padStart(2,'0');
@@ -150,11 +155,20 @@ function getWarn(){ return parseInt(localStorage.getItem(LS.warns)||"0",10); }
 function show(id){ ['welcome','exam','locked'].forEach(x=>$('#'+x).classList.add('hidden')); $('#'+id).classList.remove('hidden'); }
 function lock(){ localStorage.setItem(LS.locked,'1'); log('LOCK'); show('locked'); }
 function log(ev){ const arr = JSON.parse(localStorage.getItem(LS.log)||"[]"); arr.push({t:new Date().toISOString(), ev}); localStorage.setItem(LS.log, JSON.stringify(arr)); }
+function toast(msg){ const el = document.getElementById('softToast'); el.textContent = msg; el.style.display='block'; clearTimeout(el._t); el._t=setTimeout(()=>el.style.display='none',3000); }
 
 $('#year').textContent = new Date().getFullYear();
 
+/* استرجاع الحالة + تطبيق التحذيرات المعلّقة */
 (function restore(){
   if(localStorage.getItem(LS.locked)==='1'){ show('locked'); return; }
+  const pend = parseInt(localStorage.getItem(LS.pending)||'0',10);
+  if(pend>0){
+    setWarn(getWarn()+pend);
+    localStorage.setItem(LS.pending,'0');
+    toast(`تم تسجيل ${pend} تحذير بسبب مغادرة/إعادة تحميل الصفحة.`);
+    if(getWarn()>=WARN_LIMIT){ lock(); return; }
+  }
   const sid = localStorage.getItem(LS.id);
   const st = parseInt(localStorage.getItem(LS.start)||"0",10);
   if(sid && st && (now() - st) < DURATION*1000){
@@ -165,6 +179,7 @@ $('#year').textContent = new Date().getFullYear();
   }
 })();
 
+/* المؤقت */
 let interval=null;
 function startTimer(startAt){
   function tick(){
@@ -172,12 +187,12 @@ function startTimer(startAt){
     const left = Math.max(0, DURATION - elapsed);
     const t = fmt(left);
     $('#timerMain').textContent = t; $('#timerTop').textContent = t;
-    if(left<=0){ alert('انتهى وقت الامتحان. سيتم قفل الصفحة.'); lock(); clearInterval(interval); }
+    if(left<=0){ toast('انتهى وقت الامتحان. سيتم قفل الصفحة.'); lock(); clearInterval(interval); }
   }
   tick(); interval=setInterval(tick,1000);
 }
 
-// Tap helpers
+/* Tap helpers */
 function addTap(id, fn){
   const el = typeof id==='string' ? $(id) : id;
   if(!el) return;
@@ -185,42 +200,29 @@ function addTap(id, fn){
   el.addEventListener('touchend', (e)=>{ e.preventDefault(); fn(e); }, {passive:false});
 }
 
-// Start / Info
+/* بدء / إرشادات */
 function startExam(){
   const sid = $('#sid').value.trim(); const pw  = $('#spw').value.trim();
-  if(!sid || !pw) return alert('اكتب الـ ID وكلمة المرور');
-  if(!(sid in STUDENTS) || STUDENTS[sid] !== pw) return alert('بيانات الدخول غير صحيحة');
-  const startAt = now(); localStorage.setItem(LS.id, sid); localStorage.setItem(LS.start, String(startAt)); localStorage.setItem(LS.warns, "0"); localStorage.setItem(LS.redo, "0");
+  if(!sid || !pw) return toast('اكتب الـ ID وكلمة المرور');
+  if(!(sid in STUDENTS) || STUDENTS[sid] !== pw) return toast('بيانات الدخول غير صحيحة');
+  const startAt = now();
+  localStorage.setItem(LS.id, sid);
+  localStorage.setItem(LS.start, String(startAt));
+  localStorage.setItem(LS.warns, "0");
+  localStorage.setItem(LS.redo, "0");
+  localStorage.setItem(LS.pending, "0");
   log('LOGIN:'+sid); openExam(sid, startAt);
 }
-function showInfo(){ alert('التعليمات:\n- مدة الامتحان ساعتين من لحظة البدء.\n- الخروج من التطبيق/التبويب = تحذير.\n- عند ٣ تحذيرات يتم القفل.\n- النسخ ممنوع، اللصق مسموح.'); }
+function showInfo(){ toast('التعليمات: مدة الامتحان ساعتين — الخروج = تحذير — ٣ تحذيرات ويُقفل — النسخ ممنوع، اللصق مسموح.'); }
 
-// Exam open
+/* فتح الامتحان */
 function openExam(sid, startAt){
   $('#studentLabel').textContent = `الطالب: ${sid} (${sid})`;
   $('#gform').src = GFORM_URL;
   show('exam'); startTimer(startAt); guards();
 }
 
-// Anti-cheat
-function guards(){
-  window.addEventListener('contextmenu', e=>e.preventDefault(), {passive:false});
-  window.addEventListener('copy', e=>{ e.preventDefault(); addWarn('نسخ محتوى'); }, {passive:false});
-  window.addEventListener('keydown', e=>{
-    if (e.key === 'F12' || ((e.ctrlKey||e.metaKey) && e.shiftKey && ['I','C','J'].includes(e.key))) { e.preventDefault(); addWarn('محاولة فتح أدوات المطور'); }
-  }, {passive:false});
-
-  function hidden(){ log('HIDE'); addWarn('الخروج من التطبيق/التبويب'); try{ location.reload(); }catch{} }
-  function shown(){ log('SHOW'); }
-  document.addEventListener('visibilitychange', ()=>{ if(document.hidden) hidden(); else shown(); });
-  window.addEventListener('pagehide', hidden);
-  window.addEventListener('blur', ()=>{ if(/Mobi|Android|iPhone/i.test(navigator.userAgent)) hidden(); });
-  window.addEventListener('focus', shown);
-
-  window.addEventListener('beforeunload', (e)=>{ if($('#exam') && !$('#exam').classList.contains('hidden')){ e.preventDefault(); e.returnValue=''; } });
-}
-
-// Warning modal
+/* مودال التحذير */
 function openWarnModal(text, n){
   $('#warnNo').textContent = String(n);
   $('#warnMsg').textContent = text + ' — من فضلك ابقَ داخل صفحة الامتحان واتّبع القواعد.';
@@ -230,27 +232,63 @@ function openWarnModal(text, n){
     $('#warnOk').addEventListener('click', handler, {once:true});
   });
 }
-
 async function addWarn(kind){
   let n = getWarn()+1; setWarn(n);
   await openWarnModal(kind, n);
-  if(n>=WARN_LIMIT){ alert('تم تجاوز الحد من التحذيرات. سيتم قفل الصفحة.'); lock(); }
+  if(n>=WARN_LIMIT){ toast('تم تجاوز الحد من التحذيرات.'); lock(); }
+}
+/* تحذير صامت (يُستخدم مع reload/close) */
+function bumpWarnSilent(kind){
+  setWarn(getWarn()+1);
+  log('WARN_SILENT:'+kind);
 }
 
-// REDO
+/* الحماية */
+function guards(){
+  window.addEventListener('contextmenu', e=>e.preventDefault(), {passive:false});
+  window.addEventListener('copy', e=>{ e.preventDefault(); addWarn('نسخ محتوى'); }, {passive:false});
+  window.addEventListener('keydown', e=>{
+    if (e.key === 'F12' || ((e.ctrlKey||e.metaKey) && e.shiftKey && ['I','C','J'].includes(e.key))) {
+      e.preventDefault(); addWarn('محاولة فتح أدوات المطور');
+    }
+  }, {passive:false});
+
+  function hidden(){ log('HIDE'); addWarn('الخروج من التطبيق/التبويب'); }
+  function shown(){ log('SHOW'); }
+
+  document.addEventListener('visibilitychange', ()=>{ if(document.hidden) hidden(); else shown(); });
+
+  // عند الإغلاق/إعادة التحميل: سجّل تحذير محلي + زوّد pending لضمان عدم ضياعه
+  window.addEventListener('pagehide', ()=>{
+    bumpWarnSilent('pagehide');
+    const pend = parseInt(localStorage.getItem(LS.pending)||'0',10);
+    localStorage.setItem(LS.pending, String(pend + 1));
+  });
+
+  window.addEventListener('beforeunload', (e)=>{
+    if($('#exam') && !$('#exam').classList.contains('hidden')){
+      bumpWarnSilent('beforeunload');
+      const pend = parseInt(localStorage.getItem(LS.pending)||'0',10);
+      localStorage.setItem(LS.pending, String(pend + 1));
+      e.preventDefault(); e.returnValue='';
+    }
+  });
+}
+
+/* REDO */
 function openRedoModal(){ const modal = $('#modal'); if(!modal) return; modal.style.display = 'flex'; $('#redoPw').type = $('#pwToggle').checked ? 'text' : 'password'; $('#redoPw').focus(); }
 function closeModal(){ const modal=$('#modal'); if(modal){ modal.style.display='none'; } $('#redoPw').value=''; }
 function verifyRedo(){
   const val = ($('#redoPw').value || '').trim();
   if(val === REDO_PASSWORD){
-    localStorage.setItem(LS.locked, '0'); localStorage.setItem(LS.warns, "0");
+    localStorage.setItem(LS.locked, '0');
     const nowt = now(); localStorage.setItem(LS.start, String(nowt));
     localStorage.setItem(LS.redo, String(parseInt(localStorage.getItem(LS.redo)||'0')+1));
     const sid = localStorage.getItem(LS.id) || prompt('أدخل ID الطالب:');
     if(sid){ localStorage.setItem(LS.id, sid); openExam(sid, nowt); }
-    closeModal(); alert('تم تفعيل الريدو — المؤقت اتصفر والنموذج اتعمله إعادة تحميل.');
+    closeModal(); toast('تم تفعيل الريدو — المؤقت اتصفر.');
   } else {
-    alert('كلمة المرور غير صحيحة. اطلبها من المدرس.');
+    toast('كلمة المرور غير صحيحة.');
   }
 }
 addTap('#modalOk', verifyRedo);
@@ -260,16 +298,16 @@ addTap('#redoBtn', openRedoModal);
 document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeModal(); });
 $('#pwToggle').addEventListener('change', (e)=>{ $('#redoPw').type = e.target.checked ? 'text' : 'password'; });
 
-// End / Logout
+/* إنهاء / خروج */
 function endNow(){
   if(confirm('هل تريد إنهاء الامتحان الآن؟ تأكد من الضغط على "إرسال" داخل نموذج Google أولاً.')){
-    localStorage.removeItem(LS.id); localStorage.removeItem(LS.start); localStorage.removeItem(LS.warns);
+    localStorage.removeItem(LS.id); localStorage.removeItem(LS.start); localStorage.removeItem(LS.warns); localStorage.removeItem(LS.pending);
     log('END_NOW'); show('welcome');
   }
 }
 function logout(){
   if(confirm('تسجيل خروج سيُنهي الجلسة. متأكد؟')){
-    localStorage.removeItem(LS.id); localStorage.removeItem(LS.start); localStorage.removeItem(LS.warns);
+    localStorage.removeItem(LS.id); localStorage.removeItem(LS.start); localStorage.removeItem(LS.warns); localStorage.removeItem(LS.pending);
     log('LOGOUT'); show('welcome');
   }
 }
