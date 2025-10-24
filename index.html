@@ -25,7 +25,6 @@
     .btn{padding:12px 16px;border-radius:12px;border:1px solid rgba(255,255,255,0.12);font-weight:700}
     .btn-primary{background:#8ab4ff;color:#00162a;border:none}
     .actions{display:flex;gap:8px;flex-wrap:wrap}
-    /* Toast بسيط */
     #softToast{position:fixed;left:16px;right:16px;bottom:16px;background:#0b1937;color:#dbe6ff;border:1px solid #2a3b6b;padding:12px 14px;border-radius:12px;z-index:80;box-shadow:0 6px 24px rgba(0,0,0,.4);text-align:center;font-weight:700;display:none}
   </style>
 </head>
@@ -100,15 +99,17 @@
     <footer class="mt-4 text-center opacity-80">© <span id="year"></span> Mr. Mohamed Sobhy — Arabic Language</footer>
   </div>
 
-  <!-- REDO modal -->
+  <!-- REDO modal (ID + باسورد الطالب + باسورد الريدو) -->
   <div id="modal" class="modal-bg" role="dialog" aria-modal="true" aria-labelledby="redoTitle">
     <div class="modal">
-      <h3 id="redoTitle" style="margin:0 0 8px;font-weight:800">إدخال كلمة مرور الريدو</h3>
-      <p class="muted" style="margin:0 0 10px">عشان تعمل ريدو يا غشّاش 😄 — خَلّي المستر يديك كلمة مرور الريدو وادخلها هنا.</p>
-      <div class="flex gap-2 items-center">
-        <input id="redoPw" class="allow-select input" type="password" placeholder="كلمة مرور المدرس للريدو" style="flex:1;padding:10px;margin-bottom:8px" dir="ltr" autocomplete="off"/>
-        <label class="small flex items-center gap-1" style="margin-bottom:8px">
-          <input id="pwToggle" type="checkbox" /> إظهار
+      <h3 id="redoTitle" style="margin:0 0 8px;font-weight:800">إدخال بيانات الريدو</h3>
+      <p class="muted" style="margin:0 0 10px">ادخل ID الطالب + كلمة مرور الطالب + كلمة مرور الريدو من المستر.</p>
+      <div class="flex flex-col gap-2">
+        <input id="redoId" class="allow-select input px-3 py-2" placeholder="ID الطالب" autocomplete="off"/>
+        <input id="redoPwStudent" class="allow-select input px-3 py-2" type="password" placeholder="كلمة مرور الطالب" autocomplete="off"/>
+        <input id="redoPw" class="allow-select input px-3 py-2" type="password" placeholder="كلمة مرور الريدو (المستر)" autocomplete="off"/>
+        <label class="small flex items-center gap-1">
+          <input id="pwToggle" type="checkbox" /> إظهار كلمات المرور
         </label>
       </div>
       <div class="actions justify-end">
@@ -139,12 +140,23 @@
   <div id="softToast"></div>
 
 <script>
+/* ===================== الإعدادات ===================== */
 const GFORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSd-KaIDtPRra4Ixa-sl70FUIFXuxQ-buS-zt_TLmJ-bHlwLHg/viewform?embedded=true";
 const DURATION = 2 * 60 * 60; // ساعتين
 const WARN_LIMIT = 3;
 const REDO_PASSWORD = "admin9redo";
+const UNBAN_PASSWORD = "admin9unban";   // كلمة فكّ الحظر النهائي
+const BLOCK_URL = "block.html";         // صفحة الحظر
+
+/* الطلاب */
 const STUDENTS = {"Farouk":"Farouk273","Shady":"Shady441","Mostafa":"Mostafa562","Lina":"Lina834","Rokaya":"Rokaya199","Menna":"Menna482","Zad":"Zad901","7oda":"7oda317","Moaz":"Moaz652","Menna2":"Menna745","Dalen":"Dalen209","Jana":"Jana338","Somaya":"Somaya555","Roudina":"Roudina812","Malak":"Malak633","Omar1":"Omar441","Omar2":"Omar932","Sama":"Sama214","Roaa":"Roaa687"};
 
+/* المحظورين (ID + نفس باسورد الطالب) */
+const BANNED_CREDENTIALS = [
+  ["Mostafa","Mostafa562"], // مصطفى
+];
+
+/* ===================== أدوات عامة ===================== */
 const LS = { id:'ms_id', start:'ms_start', warns:'ms_warns', locked:'ms_locked', redo:'ms_redo', log:'ms_log', pending:'ms_pending_warns' };
 const $ = (s)=>document.querySelector(s);
 const now = ()=>Date.now();
@@ -159,7 +171,54 @@ function toast(msg){ const el = document.getElementById('softToast'); el.textCon
 
 $('#year').textContent = new Date().getFullYear();
 
-/* استرجاع الحالة + تطبيق التحذيرات المعلّقة */
+/* ===================== بصمة الجهاز + قفل نهائي ===================== */
+// بصمة بسيطة: UA + Platform + لغات + دقة الشاشة + عمق الألوان + المنطقة الزمنية + عدد الأنوية إن وُجد
+function deviceFingerprint(){
+  const nav = window.navigator;
+  const parts = [
+    nav.userAgent || '',
+    nav.platform || '',
+    (nav.languages || []).join(','),
+    screen.width+'x'+screen.height,
+    String(screen.colorDepth || ''),
+    String(new Date().getTimezoneOffset()),
+    String(nav.hardwareConcurrency || ''),
+  ].join('||');
+  // هاش بسيط
+  let hash=0; for(let i=0;i<parts.length;i++){ hash=((hash<<5)-hash)+parts.charCodeAt(i); hash|=0; }
+  return String(hash);
+}
+const FP = deviceFingerprint();
+
+function isBannedCredential(id,pw){ return BANNED_CREDENTIALS.some(([x,y])=>x===id&&y===pw); }
+
+function setPermanentBan(){
+  // خزّن البصمة في أكثر من مكان احتياطيًا
+  try{
+    localStorage.setItem('permBanHash', FP);
+    sessionStorage.setItem('permBanHash', FP);
+  }catch(e){}
+}
+
+function clearPermanentBan(){
+  try{
+    localStorage.removeItem('permBanHash');
+    sessionStorage.removeItem('permBanHash');
+  }catch(e){}
+}
+
+function checkPermanentBanAndRedirect(){
+  try{
+    const ls = localStorage.getItem('permBanHash');
+    const ss = sessionStorage.getItem('permBanHash');
+    if(ls===FP || ss===FP){
+      window.location.href = BLOCK_URL;
+    }
+  }catch(e){}
+}
+checkPermanentBanAndRedirect();
+
+/* ===================== استرجاع الحالة ===================== */
 (function restore(){
   if(localStorage.getItem(LS.locked)==='1'){ show('locked'); return; }
   const pend = parseInt(localStorage.getItem(LS.pending)||'0',10);
@@ -179,7 +238,7 @@ $('#year').textContent = new Date().getFullYear();
   }
 })();
 
-/* المؤقت */
+/* ===================== المؤقّت ===================== */
 let interval=null;
 function startTimer(startAt){
   function tick(){
@@ -192,7 +251,7 @@ function startTimer(startAt){
   tick(); interval=setInterval(tick,1000);
 }
 
-/* Tap helpers */
+/* ===================== Tap helpers ===================== */
 function addTap(id, fn){
   const el = typeof id==='string' ? $(id) : id;
   if(!el) return;
@@ -200,11 +259,27 @@ function addTap(id, fn){
   el.addEventListener('touchend', (e)=>{ e.preventDefault(); fn(e); }, {passive:false});
 }
 
-/* بدء / إرشادات */
+/* ===================== بدء / إرشادات ===================== */
 function startExam(){
   const sid = $('#sid').value.trim(); const pw  = $('#spw').value.trim();
   if(!sid || !pw) return toast('اكتب الـ ID وكلمة المرور');
+
+  // فكّ الحظر النهائي بالباسورد الخاص
+  if(pw === UNBAN_PASSWORD){
+    clearPermanentBan();
+    toast('تم رفع الحظر عن هذا الجهاز.');
+    return;
+  }
+
+  // لو الطالب محظور → فعّل القفل النهائي + تحويل لصفحة الحظر
+  if(isBannedCredential(sid, pw)){
+    setPermanentBan();
+    window.location.href = BLOCK_URL;
+    return;
+  }
+
   if(!(sid in STUDENTS) || STUDENTS[sid] !== pw) return toast('بيانات الدخول غير صحيحة');
+
   const startAt = now();
   localStorage.setItem(LS.id, sid);
   localStorage.setItem(LS.start, String(startAt));
@@ -215,14 +290,14 @@ function startExam(){
 }
 function showInfo(){ toast('التعليمات: مدة الامتحان ساعتين — الخروج = تحذير — ٣ تحذيرات ويُقفل — النسخ ممنوع، اللصق مسموح.'); }
 
-/* فتح الامتحان */
+/* ===================== فتح الامتحان ===================== */
 function openExam(sid, startAt){
   $('#studentLabel').textContent = `الطالب: ${sid} (${sid})`;
   $('#gform').src = GFORM_URL;
   show('exam'); startTimer(startAt); guards();
 }
 
-/* مودال التحذير */
+/* ===================== مودال التحذير ===================== */
 function openWarnModal(text, n){
   $('#warnNo').textContent = String(n);
   $('#warnMsg').textContent = text + ' — من فضلك ابقَ داخل صفحة الامتحان واتّبع القواعد.';
@@ -237,13 +312,13 @@ async function addWarn(kind){
   await openWarnModal(kind, n);
   if(n>=WARN_LIMIT){ toast('تم تجاوز الحد من التحذيرات.'); lock(); }
 }
-/* تحذير صامت (يُستخدم مع reload/close) */
+/* تحذير صامت (reload/close) */
 function bumpWarnSilent(kind){
   setWarn(getWarn()+1);
   log('WARN_SILENT:'+kind);
 }
 
-/* الحماية */
+/* ===================== الحماية ===================== */
 function guards(){
   window.addEventListener('contextmenu', e=>e.preventDefault(), {passive:false});
   window.addEventListener('copy', e=>{ e.preventDefault(); addWarn('نسخ محتوى'); }, {passive:false});
@@ -258,7 +333,6 @@ function guards(){
 
   document.addEventListener('visibilitychange', ()=>{ if(document.hidden) hidden(); else shown(); });
 
-  // عند الإغلاق/إعادة التحميل: سجّل تحذير محلي + زوّد pending لضمان عدم ضياعه
   window.addEventListener('pagehide', ()=>{
     bumpWarnSilent('pagehide');
     const pend = parseInt(localStorage.getItem(LS.pending)||'0',10);
@@ -275,30 +349,48 @@ function guards(){
   });
 }
 
-/* REDO */
-function openRedoModal(){ const modal = $('#modal'); if(!modal) return; modal.style.display = 'flex'; $('#redoPw').type = $('#pwToggle').checked ? 'text' : 'password'; $('#redoPw').focus(); }
-function closeModal(){ const modal=$('#modal'); if(modal){ modal.style.display='none'; } $('#redoPw').value=''; }
+/* ===================== REDO (يتحقق من 3 خانات) ===================== */
+function openRedoModal(){ const modal = $('#modal'); if(!modal) return; modal.style.display = 'flex'; syncPwShow(); $('#redoId').focus(); }
+function closeModal(){ const modal=$('#modal'); if(modal){ modal.style.display='none'; } }
+function syncPwShow(){
+  const show = $('#pwToggle')?.checked;
+  if($('#redoPwStudent')) $('#redoPwStudent').type = show ? 'text' : 'password';
+  if($('#redoPw')) $('#redoPw').type = show ? 'text' : 'password';
+}
+document.getElementById('pwToggle')?.addEventListener('change', syncPwShow);
+
 function verifyRedo(){
-  const val = ($('#redoPw').value || '').trim();
-  if(val === REDO_PASSWORD){
-    localStorage.setItem(LS.locked, '0');
-    const nowt = now(); localStorage.setItem(LS.start, String(nowt));
-    localStorage.setItem(LS.redo, String(parseInt(localStorage.getItem(LS.redo)||'0')+1));
-    const sid = localStorage.getItem(LS.id) || prompt('أدخل ID الطالب:');
-    if(sid){ localStorage.setItem(LS.id, sid); openExam(sid, nowt); }
-    closeModal(); toast('تم تفعيل الريدو — المؤقت اتصفر.');
-  } else {
-    toast('كلمة المرور غير صحيحة.');
+  const id  = ($('#redoId').value || '').trim();
+  const spw = ($('#redoPwStudent').value || '').trim();
+  const rpw = ($('#redoPw').value || '').trim();
+
+  if(!id || !spw || !rpw) return toast('من فضلك أدخل كل البيانات.');
+  if(!(id in STUDENTS) || STUDENTS[id] !== spw) return toast('بيانات الطالب غير صحيحة.');
+
+  // لو محظور → قفل نهائي + تحويل
+  if(isBannedCredential(id, spw)){
+    setPermanentBan();
+    window.location.href = BLOCK_URL;
+    return;
   }
+
+  if(rpw !== REDO_PASSWORD) return toast('كلمة مرور الريدو غير صحيحة.');
+
+  // نجاح: تصفير المؤقت وفتح جلسة جديدة
+  localStorage.setItem(LS.locked, '0');
+  const nowt = now(); localStorage.setItem(LS.start, String(nowt));
+  localStorage.setItem(LS.redo, String(parseInt(localStorage.getItem(LS.redo)||'0')+1));
+  localStorage.setItem(LS.id, id);
+  openExam(id, nowt);
+  closeModal(); toast('تم تفعيل الريدو — المؤقت اتصفر.');
 }
 addTap('#modalOk', verifyRedo);
 addTap('#modalCancel', closeModal);
 addTap('#lockedRedoBtn', openRedoModal);
 addTap('#redoBtn', openRedoModal);
 document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeModal(); });
-$('#pwToggle').addEventListener('change', (e)=>{ $('#redoPw').type = e.target.checked ? 'text' : 'password'; });
 
-/* إنهاء / خروج */
+/* ===================== إنهاء / خروج ===================== */
 function endNow(){
   if(confirm('هل تريد إنهاء الامتحان الآن؟ تأكد من الضغط على "إرسال" داخل نموذج Google أولاً.')){
     localStorage.removeItem(LS.id); localStorage.removeItem(LS.start); localStorage.removeItem(LS.warns); localStorage.removeItem(LS.pending);
@@ -313,6 +405,9 @@ function logout(){
 }
 addTap('#submitEnd', endNow);
 addTap('#logout', logout);
+
+/* كشف الحظر النهائي كل مرة */
+checkPermanentBanAndRedirect();
 
 window.startExam = startExam;
 window.showInfo = showInfo;
