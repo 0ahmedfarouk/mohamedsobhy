@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+  <title>تم حظرك — Mr. Mohamed Sobhy</title>
+  <meta name="robots" content="noindex,nofollow"/>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg1:#070A1A; --bg2:#0D1B3A; }
+    *{ -webkit-tap-highlight-color:transparent }
+    body{
+      margin:0; color:#fff; font-family:Cairo, system-ui;
+      background: radial-gradient(1200px 700px at 70% -10%, #123 0%, transparent 60%),
+                  linear-gradient(135deg,var(--bg1),var(--bg2));
+      min-height:100dvh; display:grid; place-items:center;
+    }
+    .card{
+      background:linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      border:1px solid rgba(255,255,255,.12);
+      backdrop-filter: blur(10px);
+      border-radius:16px;
+      max-width:720px; width:92%;
+      box-shadow:0 20px 60px rgba(0,0,0,.5);
+    }
+    .badge{
+      display:inline-block; border-radius:12px; font-weight:900;
+      background:linear-gradient(90deg,#ff7a7a,#ffb199);
+      color:#350000; padding:8px 14px; font-size:14px;
+    }
+    .muted{ opacity:.85 }
+    .btn{ padding:12px 16px; border-radius:12px; font-weight:800; }
+    .btn-ghost{ border:1px solid rgba(255,255,255,.18) }
+    .logo{width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.08)}
+  </style>
+</head>
+<body>
+  <main class="card p-5 md:p-8">
+    <header class="flex items-center gap-3 mb-4">
+      <img src="logo.png" class="logo" alt="Mr. Mohamed Sobhy">
+      <div>
+        <div class="text-xl md:text-2xl font-black">Mr. Mohamed Sobhy</div>
+        <div class="text-sm muted">Arabic Language • الصف الثالث الثانوي</div>
+      </div>
+    </header>
+
+    <div class="badge">وضع الحظر مُفعّل</div>
+    <h1 class="text-2xl md:text-3xl font-black mt-3">تم حظرك من دخول الويبسايت</h1>
+    <p class="mt-2 text-base md:text-lg muted">
+      بسبب محاولات غش أو مخالفات لقواعد الامتحان، تم قفل الوصول للموقع بشكل مؤقت.
+      <br/>شكرًا لتفهمك.
+    </p>
+
+    <div class="mt-5 grid gap-2">
+      <div class="rounded-xl p-4 bg-white/5 border border-white/10">
+        <div class="font-bold">السبب</div>
+        <div class="muted">انتهاك سياسات الامتحان (محاولة غش/الخروج من الصفحة/فتح أدوات المطوّر).</div>
+      </div>
+      <div class="rounded-xl p-4 bg-white/5 border border-white/10">
+        <div class="font-bold">للاستفسار وإعادة التفعيل</div>
+        <div class="muted">تواصل مع المدرّس: <b>محمد صبحي</b></div>
+      </div>
+    </div>
+
+    <div class="mt-6 flex flex-wrap gap-8 items-center">
+      <a class="btn btn-ghost" href="mailto:info@example.com">مراسلة عبر البريد</a>
+      <div class="text-sm opacity-70">© <span id="y"></span> Mr. Mohamed Sobhy</div>
+    </div>
+  </main>
+
+  <script>document.getElementById('y').textContent = new Date().getFullYear();</script>
+</body>
+</html>
